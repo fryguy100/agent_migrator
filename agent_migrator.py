@@ -21,7 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from ast import pattern
+
 import os
 import sys
 from traceback import print_tb
@@ -214,6 +214,11 @@ print("\n")
 
 try:
     rp_resp = service.removePhone( name = enumber)
+except:
+    device_id = input("Couldn't find the phone with the name of " + enumber + ", try the PC/Device id:").capitalize()
+
+try:
+    rp_resp = service.removePhone( name = device_id)
 except Fault as err:
     print( f'Zeep error: removePhone: { err }' )
 

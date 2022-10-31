@@ -1,0 +1,16 @@
+.vscode/settings.json
+*.pyc
+wsdl.txt
+.env*
+!.env.example
+venv
+*.pem
+schema*/
+!schema/
+build*/
+!build/
+dist*/
+!dist/
+agent_migrator*/
+!agent_migrator/
+.DS_Store
