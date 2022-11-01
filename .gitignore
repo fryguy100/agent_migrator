@@ -7,9 +7,9 @@ wsdl.txt
 venv
 *.pem
 schema/**
-!schema/
 build/**
 dist/**
-agent_migrator*/
+dist/agent_migrator/**
+agent_migrator/
 *.spec
 .DS_Store
