@@ -1,4 +1,4 @@
-.vscode/settings.json
+.vscode/**
 *.pyc
 wsdl.txt
 .env*
@@ -6,7 +6,6 @@ wsdl.txt
 !.env.example
 venv
 *.pem
-schema/**
 build/**
 dist/**
 dist/agent_migrator/**
