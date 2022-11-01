@@ -1,7 +1,7 @@
-"""This is a script to migrate a contact center agent from CIPC to Jabber. After being prompted for the username, 
-AXL fetches the extension mobility device profile for a user, copies its settings. Then creates a CSF Jabber 
-Device for the enduser and associates the new device to the end user. Then it associates the CSF with pguser 
-and zoomjtapi application user. Finally, it cleans up and deletes the old CIPC and Device Profile.
+"""This is a script to migrate a contact center agent from CIPC to Jabber for agents with only CIPC and no device profile.
+AXL fetches the agent's CIPC, copies its settings to a new CSF profile. Then assigns the new CSF Jabber Device to the enduser 
+which is assigned as Owner User ID to that device profile and enables IM and Presence for that End User, using the zeep 
+library. 
 
 Copyright (c) 2022 Cisco and/or its affiliates.
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -113,19 +113,12 @@ deviceprofile = enumber.capitalize() + '_EM_8841'
 
 #retrieve device profile
 try:
-     resp = service.getDeviceProfile(name=deviceprofile)
+     resp = service.getPhone(name=enumber)
 except Fault:
-    deviceprofile = enumber.capitalize() + '_EM_8851'
-
-try:
-     resp = service.getDeviceProfile(name=deviceprofile)
-except Fault:
-    print("No EM Profile Found")
-    sys.exit(1)
-    show_history()
+    resp = service.getPhone(name=enumber.capitalize())
 
 #save device profile settings to vars
-phone_list = resp['return'].deviceProfile
+phone_list = resp['return'].phone
 description = phone_list['description']
 lines = phone_list.lines
 extension1 = phone_list.lines.line[0]['dirn']['pattern']
@@ -183,32 +176,13 @@ print("Updating EndUser")
 print("-" * 10)
 print("\n")
 
-#update end user and app users
+#update end user
 resp = service.updateUser(userid=owner_user_name, associatedDevices=associated_devices, imAndPresenceEnable=False)
 
-print("\n")
-print("-" * 10)
-print("Updating pguser")
-print("-" * 10)
-print("\n")
-
-resp = service.getAppUser(userid='pguser')
-pguser_device_List = resp['return'].appUser.associatedDevices.device
-complete_pguser_list = pguser_device_List + [device_name]
 
 print("\n")
 print("-" * 10)
-print("Updating zoomjtapi user")
-print("-" * 10)
-print("\n")
-
-resp = service.getAppUser(userid='zoomjtapi')
-zoomjtapi_device_List = resp['return'].appUser.associatedDevices.device
-complete_zoomjtapi_list = zoomjtapi_device_List + [device_name]
-
-print("\n")
-print("-" * 10)
-print("Deleting " + phone_list['name'] + " and associated users CIPC " + enumber)
+print("Deleting associated user CIPC " + enumber)
 print("-" * 10)
 print("\n")
 
@@ -224,13 +198,3 @@ except Fault as err:
 
 print( '\nremovePhone response:' )
 print( rp_resp, '\n' )
-
-try:
-    rdp_resp = service.removeDeviceProfile( name = deviceprofile)
-except Fault as err:
-    print( f'Zeep error: removePhone: { err }' )
-
-
-print( '\nremovePhone response:' )
-print( rdp_resp, '\n' )
-
