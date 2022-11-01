@@ -6,7 +6,11 @@ The agent_migrator script is designed to take the username of an agent, copy a d
 migrate the settings over to a CSF profile to enable the agent for Jabber, associates the user to the CSF profile, 
 the pguser and the zoom recording application users. Then it cleans up the old CIPC profile of the user and the device profile. 
 
-The script is built based on the samples seen in CiscoDevNet/axl-python-zeep-samples repo.
+The cipc_to_csf script is much like the agent_migrator script, but only for agents with CIPC and no Device Profiles.
+It also only creates the CSF and associates it to the end user. It does not update the application users. It does
+clean up afterwards. 
+
+The scripts are built based on the samples seen in CiscoDevNet/axl-python-zeep-samples repo.
 
 [https://developer.cisco.com/site/axl/](https://developer.cisco.com/site/axl/)
 
