@@ -108,6 +108,8 @@ def show_history():
 
 #ask admin for the e# needed, and format it into needed vars
 enumber = input("Enter E# :")
+
+
 owner_user_name = enumber.capitalize()
 deviceprofile = enumber.capitalize() + '_EM_8841'
 
@@ -183,7 +185,7 @@ print("Updating EndUser")
 print("-" * 10)
 print("\n")
 
-#update end user and app users
+#update end user
 resp = service.updateUser(userid=owner_user_name, associatedDevices=associated_devices, imAndPresenceEnable=False)
 
 print("\n")
@@ -192,9 +194,25 @@ print("Updating pguser")
 print("-" * 10)
 print("\n")
 
-resp = service.getAppUser(userid='pguser')
-pguser_device_List = resp['return'].appUser.associatedDevices.device
-complete_pguser_list = pguser_device_List + [device_name]
+""" here we start updating the app users. sql injection is the best method here 
+since updateAppUser would overwrite every other device associated """
+
+sql = '''insert into applicationuserdevicemap (fkapplicationuser, fkdevice, tkuserassociation)
+    select au.pkid, d.pkid, 1 from applicationuser au cross join device d 
+    where au.name = 'pguser' and d.name in ('{device_name}') and 
+    d.pkid not in (select fkdevice from applicationuserdevicemap where fkapplicationuser = au.pkid)'''.format(
+        device_name = device_name
+    )
+try:
+    resp = service.executeSQLUpdate( sql )
+except Fault as err:
+    print('Zeep error: executeSQLUpdate: {err}'.format( err = err ) )
+else:
+    pguser_update = resp['return']['rowsUpdated']
+    if pguser_update == 1:
+        print('pguser updated successfully!')
+    else:
+        print('pguser update failed!')
 
 print("\n")
 print("-" * 10)
@@ -202,9 +220,22 @@ print("Updating zoomjtapi user")
 print("-" * 10)
 print("\n")
 
-resp = service.getAppUser(userid='zoomjtapi')
-zoomjtapi_device_List = resp['return'].appUser.associatedDevices.device
-complete_zoomjtapi_list = zoomjtapi_device_List + [device_name]
+sql = '''insert into applicationuserdevicemap (fkapplicationuser, fkdevice, tkuserassociation)
+    select au.pkid, d.pkid, 1 from applicationuser au cross join device d 
+    where au.name = 'zoomjtapi' and d.name in ('{device_name}') and 
+    d.pkid not in (select fkdevice from applicationuserdevicemap where fkapplicationuser = au.pkid)'''.format(
+        device_name = device_name
+    )
+try:
+    resp = service.executeSQLUpdate( sql )
+except Fault as err:
+    print('Zeep error: executeSQLUpdate: {err}'.format( err = err ) )
+else:
+    zoom_update = resp['return']['rowsUpdated']
+    if zoom_update == 1:
+        print( 'zoomjtapi updated successfully!' )
+    else:
+        print( 'zoomjtapi update failed!' )
 
 print("\n")
 print("-" * 10)
@@ -214,23 +245,17 @@ print("\n")
 
 try:
     rp_resp = service.removePhone( name = enumber)
+    print('CIPC deleted.')
 except:
     device_id = input("Couldn't find the phone with the name of " + enumber + ", try the PC/Device id:").capitalize()
-
-try:
-    rp_resp = service.removePhone( name = device_id)
-except Fault as err:
-    print( f'Zeep error: removePhone: { err }' )
-
-print( '\nremovePhone response:' )
-print( rp_resp, '\n' )
+    try:
+        rp_resp = service.removePhone( name = device_id)
+        print('CIPC deleted.')
+    except Fault as err:
+        print( f'Zeep error: removePhone: { err }' )
 
 try:
     rdp_resp = service.removeDeviceProfile( name = deviceprofile)
+    print('Device Profile deleted.')
 except Fault as err:
     print( f'Zeep error: removePhone: { err }' )
-
-
-print( '\nremovePhone response:' )
-print( rdp_resp, '\n' )
-
