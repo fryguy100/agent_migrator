@@ -237,7 +237,28 @@ with open(filename, 'r') as csvfile:
         print("-" * 10)
         print("\n")
 
+        #gather device profile and other info from soft phone
+        try:
+            phone_resp = service.listPhone(searchCriteria = { 'name': owner_user_name }, returnedTags = { 'devicePoolName': '', 'mediaResourceListName': '', 'callingSearchSpaceName': ''})
+            DP = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
+            MRLN = phone_resp['return']['phone'][0]['mediaResourceListName']['_value_1']
+            CSS = phone_resp['return']['phone'][0]['callingSearchSpaceName']
+        except:
+            device_id = input("Couldn't find the phone with the name of " + enumber + ", try the PC/Device id:").capitalize()
+            try:
+                phone_resp = service.listPhone(searchCriteria = { 'name': device_id }, returnedTags = { 'devicePoolName': '', 'mediaResourceListName': '', 'callingSearchSpaceName': ''})
+                DP = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
+                MRLN = phone_resp['return']['phone'][0]['mediaResourceListName']['_value_1']
+                CSS = phone_resp['return']['phone'][0]['callingSearchSpaceName']
+            except Fault as err:
+                print( f'Zeep error: listPhone: { err }' )
 
+        try:
+            resp = service.updatePhone(name = device_name, devicePoolName = DP, mediaResourceListName = MRLN, callingSearchSpaceName = CSS)
+        except:
+            print("CSF didn't update with correct Device Pool info")
+            print( f'Zeep error: updatePhone: { err }' )
+            
         try:
             rp_resp = service.removePhone( name = enumber)
             print('CIPC deleted.')

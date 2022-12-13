@@ -12,3 +12,4 @@ dist/agent_migrator/**
 agent_migrator/
 *.spec
 .DS_Store
+agent list.csv

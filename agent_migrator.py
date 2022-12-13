@@ -109,6 +109,28 @@ def show_history():
 #ask admin for the e# needed, and format it into needed vars
 enumber = input("Enter E# :")
 
+#ldap check to see if the user is in active directory
+
+try:
+    resp = service.getUser(userid=enumber)
+    ldap_status = resp['return']['user']['ldapDirectoryName']['_value_1']
+    first_name = resp['return']['user']['firstName']
+    last_name = resp['return']['user']['lastName']
+    if ldap_status == None:
+        print(first_name + " " + last_name + " " + enumber + " needs to update Workday.")
+        answer = input("Are you sure you want to continue? y/n:")
+        while True:
+            if answer.lower()  in ['yes', 'y']:
+                break
+            elif answer.lower() in ['no', 'n']:
+                sys.exit(1)
+            else:
+                sys.exit(1)
+    else:
+        print(first_name + " " + last_name + " " + enumber + " is in Workday and is LDAP enabled.")
+except Fault:
+        print("No End User found for " + enumber)
+        show_history()
 
 owner_user_name = enumber.capitalize()
 deviceprofile = enumber.capitalize() + '_EM_8841'
@@ -243,13 +265,34 @@ print("Deleting " + phone_list['name'] + " and associated users CIPC " + enumber
 print("-" * 10)
 print("\n")
 
+#gather device profile and other info from soft phone
 try:
-    rp_resp = service.removePhone( name = enumber)
-    print('CIPC deleted.')
+    phone_resp = service.listPhone(searchCriteria = { 'name': owner_user_name }, returnedTags = { 'devicePoolName': '', 'mediaResourceListName': '', 'callingSearchSpaceName': ''})
+    DP = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
+    MRLN = phone_resp['return']['phone'][0]['mediaResourceListName']['_value_1']
+    CSS = phone_resp['return']['phone'][0]['callingSearchSpaceName']
 except:
     device_id = input("Couldn't find the phone with the name of " + enumber + ", try the PC/Device id:").capitalize()
     try:
-        rp_resp = service.removePhone( name = device_id)
+        phone_resp = service.listPhone(searchCriteria = { 'name': device_id }, returnedTags = { 'devicePoolName': '', 'mediaResourceListName': '', 'callingSearchSpaceName': ''})
+        DP = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
+        MRLN = phone_resp['return']['phone'][0]['mediaResourceListName']['_value_1']
+        CSS = phone_resp['return']['phone'][0]['callingSearchSpaceName']
+    except Fault as err:
+        print( f'Zeep error: listPhone: { err }' )
+
+try:
+    resp = service.updatePhone(name = device_name, devicePoolName = DP, mediaResourceListName = MRLN, callingSearchSpaceName = CSS)
+except:
+    print("CSF didn't update with correct Device Pool info")
+    print( f'Zeep error: updatePhone: { err }' )
+
+try:
+    rp_resp = service.removePhone( name = owner_user_name )
+    print('CIPC deleted.')
+except:
+    try:
+        rp_resp = service.removePhone( name = device_id )
         print('CIPC deleted.')
     except Fault as err:
         print( f'Zeep error: removePhone: { err }' )

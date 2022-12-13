@@ -31,6 +31,8 @@ from zeep.plugins import HistoryPlugin
 from zeep import Client, Settings, Plugin, xsd
 from zeep.transports import Transport
 from zeep.exceptions import Fault
+from urllib3 import disable_warnings
+from urllib3.exceptions import InsecureRequestWarning
 
 # Edit .env file to specify your Webex site/user details
 from dotenv import load_dotenv
@@ -50,6 +52,9 @@ DEBUG = False
 # You may need to change them if you are working with your own CUCM server
 
  
+disable_warnings(InsecureRequestWarning)
+
+
 
 # This class lets you view the incoming and outgoing http headers and/or XML
 class MyLoggingPlugin( Plugin ):
