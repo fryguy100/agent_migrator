@@ -24,6 +24,7 @@ SOFTWARE.
 
 import os
 import sys
+import json
 from traceback import print_tb
 from lxml import etree
 from requests import Session
@@ -108,6 +109,7 @@ def show_history():
 
 #ask admin for the e# needed, and format it into needed vars
 enumber = input("Enter E# :")
+call_center = input("Enter Cost Center # :")
 
 #ldap check to see if the user is in active directory
 
@@ -147,6 +149,46 @@ except Fault:
     print("No EM Profile Found")
     sys.exit(1)
     show_history()
+
+#retrieve list of all device pools from cucm.
+#if user input is blank, try to use the soft phone settings.
+#if exact match for dp is found in the list gathered, use that
+#otherwise try to find a match in the list and give user a list to chose from
+
+
+search_again = True
+search_successful = False
+
+try:
+    if call_center == "":
+        print("No DP given, resorting to CIPC settings.")
+    else:
+        device_pool_list = service.listDevicePool(searchCriteria = { 'name': '%' }, returnedTags = { 'name': ''})
+        device_pool_list_names = device_pool_list['return']['devicePool']
+        try:
+            for dp_index_num, dp_data in enumerate(device_pool_list_names):
+                if call_center == dp_data['name']:
+                    print('Found Call Centers match' + dp_data['name'])
+                    dp = dp_data['name']
+                    search_again = False
+                    search_successful = True
+        except:
+            print('The search failed.')
+        if search_again == True:
+            for dp_index_num, dp_data in enumerate(device_pool_list_names):
+                if call_center in dp_data['name']:
+                    print(dp_index_num, ': Found Call Centers ' + dp_data['name'])
+                    search_successful = True
+                    #dp = dp_data['name']
+            if search_successful == True:
+                dp_selection = input('Select the number of the Device Pool you most desire: ')
+                dp = device_pool_list_names[int(dp_selection)]['name']
+                print(dp)
+            else:
+                print('There was no Call Center or DP found. Will try to copy Device Settings.')
+except Fault:
+        print("Something weird happened, I couldn't look for " + call_center)
+        show_history()
 
 #save device profile settings to vars
 phone_list = resp['return'].deviceProfile
@@ -265,27 +307,33 @@ print("Deleting " + phone_list['name'] + " and associated users CIPC " + enumber
 print("-" * 10)
 print("\n")
 
-#gather device profile and other info from soft phone
+#gather device profile and other info from soft phone. if the entry from the beginning was successful, use that first.
 try:
     phone_resp = service.listPhone(searchCriteria = { 'name': owner_user_name }, returnedTags = { 'devicePoolName': '', 'mediaResourceListName': '', 'callingSearchSpaceName': ''})
-    DP = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
+    DP_from_CIPC = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
     MRLN = phone_resp['return']['phone'][0]['mediaResourceListName']['_value_1']
     CSS = phone_resp['return']['phone'][0]['callingSearchSpaceName']
 except:
     device_id = input("Couldn't find the phone with the name of " + enumber + ", try the PC/Device id:").capitalize()
     try:
         phone_resp = service.listPhone(searchCriteria = { 'name': device_id }, returnedTags = { 'devicePoolName': '', 'mediaResourceListName': '', 'callingSearchSpaceName': ''})
-        DP = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
+        DP_from_CIPC = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
         MRLN = phone_resp['return']['phone'][0]['mediaResourceListName']['_value_1']
         CSS = phone_resp['return']['phone'][0]['callingSearchSpaceName']
     except Fault as err:
         print( f'Zeep error: listPhone: { err }' )
-
-try:
-    resp = service.updatePhone(name = device_name, devicePoolName = DP, mediaResourceListName = MRLN, callingSearchSpaceName = CSS)
-except:
-    print("CSF didn't update with correct Device Pool info")
-    print( f'Zeep error: updatePhone: { err }' )
+if search_successful == True:
+    try:
+        resp = service.updatePhone(name = device_name, devicePoolName = dp, mediaResourceListName = MRLN, callingSearchSpaceName = CSS)
+    except:
+        print("CSF didn't update with correct Device Pool info")
+        print( f'Zeep error: updatePhone: { err }' )
+else:
+    try:
+        resp = service.updatePhone(name = device_name, devicePoolName = DP_from_CIPC, mediaResourceListName = MRLN, callingSearchSpaceName = CSS)
+    except:
+        print("CSF didn't update with correct Device Pool info")
+        print( f'Zeep error: updatePhone: { err }' )
 
 try:
     rp_resp = service.removePhone( name = owner_user_name )
