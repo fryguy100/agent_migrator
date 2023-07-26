@@ -109,7 +109,7 @@ def show_history():
 
 #ask admin for the e# needed, and format it into needed vars
 enumber = input("Enter E# :")
-call_center = input("Enter Cost Center # :")
+call_center = input("Enter Cost Center or Device Pool to use for " + enumber + ":")
 
 #ldap check to see if the user is in active directory
 
@@ -216,6 +216,7 @@ def fill_phone_info(name, product, owner_user_name, pattern, partition, caller_i
         'locationName': 'Hub_None',
         'sipProfileName': 'Standard SIP Profile',
         'commonPhoneConfigName': xsd.SkipValue,
+        'commonDeviceConfigName': 'Agent_CDC',
         'phoneTemplateName': xsd.SkipValue,
         'primaryPhoneName': xsd.SkipValue,
         'useTrustedRelayPoint': xsd.SkipValue,
@@ -317,9 +318,14 @@ except:
     device_id = input("Couldn't find the phone with the name of " + enumber + ", try the PC/Device id:").capitalize()
     try:
         phone_resp = service.listPhone(searchCriteria = { 'name': device_id }, returnedTags = { 'devicePoolName': '', 'mediaResourceListName': '', 'callingSearchSpaceName': ''})
-        DP_from_CIPC = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
-        MRLN = phone_resp['return']['phone'][0]['mediaResourceListName']['_value_1']
-        CSS = phone_resp['return']['phone'][0]['callingSearchSpaceName']
+        if device_id != '':
+            DP_from_CIPC = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
+            MRLN = phone_resp['return']['phone'][0]['mediaResourceListName']['_value_1']
+            CSS = phone_resp['return']['phone'][0]['callingSearchSpaceName']
+        else:
+            DP_from_CIPC = 'Default'
+            MRLN = 'MC_MRGL'
+            CSS = '06_Device'
     except Fault as err:
         print( f'Zeep error: listPhone: { err }' )
 if search_successful == True:
@@ -349,4 +355,17 @@ try:
     rdp_resp = service.removeDeviceProfile( name = deviceprofile)
     print('Device Profile deleted.')
 except Fault as err:
-    print( f'Zeep error: removePhone: { err }' )
+    # looks like someone forgot to log out of their phone. 
+    # will try to log the agent out of the phone and then delete the dp
+    try:
+        em_check_list = service.listPhone(searchCriteria = { 'name': '%' }, returnedTags = { 'name': '', 'currentProfileName': ''})
+        em_check_list_names = em_check_list['return']['phone']
+        for em_phone_index, em_data in enumerate(em_check_list_names):
+            if deviceprofile == em_data['currentProfileName']['_value_1']:
+                print('Agent was logged into their deskphone. Phone log out initiated.')
+                em_logout = service.doDeviceLogout(deviceName = em_data['name'])
+                print('Phone log out successful, removing device profile.')
+                rdp_resp = service.removeDeviceProfile( name = deviceprofile)
+    except:
+        print("couldn't pull list of phones")
+    
