@@ -217,6 +217,8 @@ def fill_phone_info(name, product, owner_user_name, pattern, partition, caller_i
         'sipProfileName': 'Standard SIP Profile',
         'commonPhoneConfigName': xsd.SkipValue,
         'commonDeviceConfigName': 'Agent_CDC',
+        'userLocale': 'English United States',
+        'networkLocale': 'United States',
         'phoneTemplateName': xsd.SkipValue,
         'primaryPhoneName': xsd.SkipValue,
         'useTrustedRelayPoint': xsd.SkipValue,

@@ -108,6 +108,7 @@ def show_history():
 
 #ask admin for the e# needed, and format it into needed vars
 enumber = input("Enter E# :")
+call_center = input("Enter Cost Center or Device Pool to use for " + enumber + ":")
 owner_user_name = enumber.capitalize()
 deviceprofile = enumber.capitalize() + '_EM_8841'
 
@@ -116,6 +117,46 @@ try:
      resp = service.getPhone(name=enumber)
 except Fault:
     resp = service.getPhone(name=enumber.capitalize())
+
+#retrieve list of all device pools from cucm.
+#if user input is blank, try to use the soft phone settings.
+#if exact match for dp is found in the list gathered, use that
+#otherwise try to find a match in the list and give user a list to chose from
+
+
+search_again = True
+search_successful = False
+
+try:
+    if call_center == "":
+        print("No DP given, resorting to CIPC settings.")
+    else:
+        device_pool_list = service.listDevicePool(searchCriteria = { 'name': '%' }, returnedTags = { 'name': ''})
+        device_pool_list_names = device_pool_list['return']['devicePool']
+        try:
+            for dp_index_num, dp_data in enumerate(device_pool_list_names):
+                if call_center == dp_data['name']:
+                    print('Found Call Centers match' + dp_data['name'])
+                    dp = dp_data['name']
+                    search_again = False
+                    search_successful = True
+        except:
+            print('The search failed.')
+        if search_again == True:
+            for dp_index_num, dp_data in enumerate(device_pool_list_names):
+                if call_center in dp_data['name']:
+                    print(dp_index_num, ': Found Call Centers ' + dp_data['name'])
+                    search_successful = True
+                    #dp = dp_data['name']
+            if search_successful == True:
+                dp_selection = input('Select the number of the Device Pool you most desire: ')
+                dp = device_pool_list_names[int(dp_selection)]['name']
+                print(dp)
+            else:
+                print('There was no Call Center or DP found. Will try to copy Device Settings.')
+except Fault:
+        print("Something weird happened, I couldn't look for " + call_center)
+        show_history()
 
 #save device profile settings to vars
 phone_list = resp['return'].phone
@@ -128,9 +169,16 @@ phone_caller_id = phone_list.lines.line[0]['e164Mask']
 phone_busy_trigger = phone_list.lines.line[0]['busyTrigger']
 uuid1 = phone_list.lines.line[0]['uuid']
 device_name = "CSF" + enumber.capitalize()
+commonDeviceConfig = phone_list['commonDeviceConfigName']['_value_1']
+networkMOH = phone_list['networkHoldMohAudioSourceId']
+userMOH = phone_list['userHoldMohAudioSourceId']
+if phone_list.lines.line[0]['recordingFlag'] == 'Call Recording Disabled':
+    recording_setting = False
+else:
+    recording_setting = True
 
 #create csf template
-def fill_phone_info(name, product, owner_user_name, pattern, partition, caller_id, busy_trigger):
+def fill_phone_info(name, product, commonDeviceConfig, networkMOH, userMOH, owner_user_name, pattern, partition, caller_id, busy_trigger):
     phone_info = {
         'name': name,
         'product': product,
@@ -143,6 +191,11 @@ def fill_phone_info(name, product, owner_user_name, pattern, partition, caller_i
         'locationName': 'Hub_None',
         'sipProfileName': 'Standard SIP Profile',
         'commonPhoneConfigName': xsd.SkipValue,
+        'commonDeviceConfigName': commonDeviceConfig,
+        'networkHoldMohAudioSourceId': networkMOH,
+        'userHoldMohAudioSourceId': userMOH,
+        'userLocale': 'English United States',
+        'networkLocale': 'United States',
         'phoneTemplateName': xsd.SkipValue,
         'primaryPhoneName': xsd.SkipValue,
         'useTrustedRelayPoint': xsd.SkipValue,
@@ -167,7 +220,7 @@ print("\n")
 
 associated_devices = device_name
 new_phone = fill_phone_info(device_name, 'Cisco Unified Client Services Framework'\
-                ,owner_user_name, phone_pattern, phone_partition, phone_caller_id, phone_busy_trigger)
+                , commonDeviceConfig, networkMOH, userMOH, owner_user_name, phone_pattern, phone_partition, phone_caller_id, phone_busy_trigger)
 resp = service.addPhone(new_phone)
 
 print("\n")
@@ -179,6 +232,67 @@ print("\n")
 #update end user
 resp = service.updateUser(userid=owner_user_name, associatedDevices=associated_devices, imAndPresenceEnable=False)
 
+#gather device profile and other info from soft phone. if the entry from the beginning was successful, use that first.
+try:
+    phone_resp = service.listPhone(searchCriteria = { 'name': owner_user_name }, returnedTags = { 'devicePoolName': '', 'mediaResourceListName': '', 'callingSearchSpaceName': '', 'locationName': ''})
+    DP_from_CIPC = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
+    MRLN = phone_resp['return']['phone'][0]['mediaResourceListName']['_value_1']
+    CSS = phone_resp['return']['phone'][0]['callingSearchSpaceName']['_value_1']
+    location = phone_resp['return']['phone'][0]['locationName']['_value_1']
+except:
+    device_id = input("Couldn't find the phone with the name of " + enumber + ", try the PC/Device id:").capitalize()
+    try:
+        phone_resp = service.listPhone(searchCriteria = { 'name': device_id }, returnedTags = { 'devicePoolName': '', 'mediaResourceListName': '', 'callingSearchSpaceName': '','locationName': ''})
+        if device_id != '':
+            DP_from_CIPC = phone_resp['return']['phone'][0]['devicePoolName']['_value_1']
+            MRLN = phone_resp['return']['phone'][0]['mediaResourceListName']['_value_1']
+            CSS = phone_resp['return']['phone'][0]['callingSearchSpaceName']['_value_1']
+            location = phone_resp['return']['phone'][0]['locationName']['_value_1']
+        else:
+            DP_from_CIPC = 'Default'
+            MRLN = 'MC_MRGL'
+            CSS = '06_Device'
+            location = 'Hub_None'
+    except Fault as err:
+        print( f'Zeep error: listPhone: { err }' )
+if search_successful == True:
+    try:
+        resp = service.updatePhone(name = device_name, devicePoolName = dp, mediaResourceListName = MRLN, callingSearchSpaceName = CSS, locationName = location)
+    except:
+        print("CSF didn't update with correct Device Pool info")
+        print( f'Zeep error: updatePhone: { err }' )
+else:
+    try:
+        resp = service.updatePhone(name = device_name, devicePoolName = DP_from_CIPC, mediaResourceListName = MRLN, callingSearchSpaceName = CSS, locationName = location)
+    except:
+        print("CSF didn't update with correct Device Pool info")
+        print( f'Zeep error: updatePhone: { err }' )
+
+if recording_setting == True:
+    print("\n")
+    print("-" * 10)
+    print("Updating zoomjtapi user")
+    print("-" * 10)
+    print("\n")
+
+    sql = '''insert into applicationuserdevicemap (fkapplicationuser, fkdevice, tkuserassociation)
+        select au.pkid, d.pkid, 1 from applicationuser au cross join device d 
+        where au.name = 'zoomjtapi' and d.name in ('{device_name}') and 
+        d.pkid not in (select fkdevice from applicationuserdevicemap where fkapplicationuser = au.pkid)'''.format(
+            device_name = device_name
+        )
+    try:
+        resp = service.executeSQLUpdate( sql )
+    except Fault as err:
+        print('Zeep error: executeSQLUpdate: {err}'.format( err = err ) )
+    else:
+        zoom_update = resp['return']['rowsUpdated']
+        if zoom_update == 1:
+            print( 'zoomjtapi updated successfully!' )
+        else:
+            print( 'zoomjtapi update failed!' )
+else:
+    print("Recording was not enabled, will not update ZoomJTAPI User.")
 
 print("\n")
 print("-" * 10)
@@ -190,11 +304,11 @@ try:
     rp_resp = service.removePhone( name = enumber)
 except:
     device_id = input("Couldn't find the phone with the name of " + enumber + ", try the PC/Device id:").capitalize()
-
-try:
-    rp_resp = service.removePhone( name = device_id)
-except Fault as err:
-    print( f'Zeep error: removePhone: { err }' )
+    try:
+        rp_resp = service.removePhone( name = device_id)
+    except Fault as err:
+        print( f'Zeep error: removePhone: { err }' )
 
 print( '\nremovePhone response:' )
 print( rp_resp, '\n' )
+
